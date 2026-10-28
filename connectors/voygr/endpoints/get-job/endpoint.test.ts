@@ -3,6 +3,7 @@ import { fromFileUrl } from "@std/path";
 import { type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     loadFixture,
     runEndpoint,
     testSealedUnit,
@@ -107,3 +108,17 @@ Deno.test("get-job encodes the batch id into one path segment", () =>
         method: "GET",
         url: "https://api.voygr.tech/v1/jobs/a%2Fb%3Fc",
     }));
+
+Deno.test({
+    name: "voygr#get-job live: an unknown batch_id is a 404 at zero",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        // a read of a job that is not this workspace's: no job is touched
+        const result = await h.live({
+            pathParams: { batch_id: "batch_00000000000000000000000000000000" },
+        });
+        assertEquals(result.httpStatus, 404, JSON.stringify(result));
+        assertEquals(result.isProviderError, true);
+        assertEquals(result.usage, ZERO);
+    },
+});

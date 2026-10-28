@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { type Json, type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
@@ -26,6 +27,10 @@ Deno.test("list-calls replays the list for free", async () => {
     assertEquals(result.isProviderError, false);
     assertEquals(result.usage, { credits: {}, evidence: {} });
     const calls = result.output as CallRow[];
+    assertEquals(
+        calls.length,
+        (await h.recorded("synthetic-happy") as CallRow[]).length,
+    );
     assertEquals(calls.map((c) => c.call_id), [
         "c_synthetic02",
         "c_synthetic01",
@@ -56,6 +61,17 @@ Deno.test("list-calls output carries no customer_id or recording_url", async () 
     }
     assertEquals(calls[1].has_recording, true);
     assertEquals(calls[1].recording_status, "available");
+});
+
+Deno.test("list-calls 401 settles zero and passes through", async () => {
+    const result = await h.run("synthetic-invalid-key-401", {
+        queryParams: { limit: 2 },
+    });
+    assertEquals(result.httpStatus, 401);
+    assertEquals(result.isProviderError, true);
+    assertEquals(result.usage, { credits: {}, evidence: {} });
+    assertEquals(result.output, await h.recorded("synthetic-invalid-key-401"));
+    assertEquals(result.output, { detail: { error: "invalid API key" } });
 });
 
 Deno.test("list-calls schema: limit is an integer from 1 to 1000", async () => {
@@ -115,3 +131,24 @@ Deno.test("list-calls without a limit sends no query", () =>
         method: "GET",
         url: "https://api.voygr.tech/calls",
     }, { body: [] }));
+
+Deno.test({
+    name:
+        "voygr#list-calls live: the workspace's calls come back without customer_id or recording_url",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        const result = await h.live({ queryParams: { limit: 1 } });
+        assertEquals(result.httpStatus, 200, JSON.stringify(result));
+        assertEquals(result.isProviderError, false);
+        assertEquals(result.usage, { credits: {}, evidence: {} });
+        // a new sub-account may have no calls: then the list is empty
+        const calls = result.output as CallRow[];
+        assert(Array.isArray(calls), JSON.stringify(calls));
+        assert(calls.length <= 1, `limit 1 returned ${calls.length}`);
+        for (const call of calls) {
+            assertEquals(typeof call.call_id, "string");
+            assert(!("customer_id" in call));
+            assert(!("recording_url" in call));
+        }
+    },
+});

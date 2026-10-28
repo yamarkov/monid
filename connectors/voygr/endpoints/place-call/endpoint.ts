@@ -191,7 +191,8 @@ export default defineEndpoint({
                     output: {
                         code: "MALFORMED_CALL",
                         message: "VOYGR accepted the call but returned no " +
-                            "call id.",
+                            "call id. A call may have been placed: read " +
+                            "voygr#list-calls before you send it again.",
                     } as Json,
                 };
             }

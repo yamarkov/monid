@@ -11,6 +11,7 @@ import {
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
+import { harness } from "../../test-support.ts";
 
 /**
  * `voygr#suggest-places`. `happy` and `no-places-found` are real answers
@@ -21,6 +22,7 @@ import {
 
 const FIXTURES = fromFileUrl(new URL("./fixtures/", import.meta.url));
 const ID = "voygr#suggest-places";
+const h = harness(ID, import.meta.url);
 const SUB_ID = "sub_00000000000000000000000000000001";
 const OWNED: OwnedResource = {
     resource: "voygr/sub-account",
@@ -50,7 +52,10 @@ Deno.test("suggest answered bills 5", async () => {
     const result = await run("happy", body);
     assertEquals(result.httpStatus, 200);
     assertEquals(result.isProviderError, false);
-    assertEquals(result.usage.credits, { default: 5 });
+    assertEquals(result.usage, {
+        credits: { default: 5 },
+        evidence: { CALL: 1 },
+    });
     assertEquals(result.output, await fixtureBody("happy"));
     const out = result.output as { suggestions: { phone_e164: string }[] };
     assertEquals(out.suggestions.length, 2);
@@ -218,33 +223,22 @@ Deno.test("suggest gives up a little after VOYGR's 15 s limit", async () => {
 });
 
 Deno.test({
-    name: "voygr#suggest-places live: an answered request bills five credits",
+    name:
+        "voygr#suggest-places live: an answered request lists suggestions and bills credits",
     ignore: liveSkip("voygr"),
     fn: async () => {
-        const unit = await testSealedUnit(ID);
-        const input = { body: { query: QUERY, limit: 1 } };
-        // the key must have sub-accounts enabled: ensure creates (or finds)
-        // the sub-account for `monid:live-test` first, as the host does
-        // before a workspace's first run, and the run gets it as owned
-        const seeds = await (await loadEndpoint({
-            unit,
-            input,
-            mode: "live",
-            scopeKey: "live-test",
-        })).ensure(input);
-        assertEquals(seeds.length, 1, JSON.stringify(seeds));
-        const result = await runEndpoint({
-            unit,
-            input,
-            mode: "live",
-            scopeKey: "live-test",
-            resources: seeds.map(({ resource, externalId, data }) => ({
-                resource,
-                externalId,
-                data,
-            })),
-        });
+        const result = await h.live({ body: { query: QUERY, limit: 1 } });
+        assertEquals(result.httpStatus, 200, JSON.stringify(result));
         assertEquals(result.isProviderError, false, JSON.stringify(result));
-        assertEquals(result.usage.credits, { default: 5 });
+        const out = result.output as { suggestions: { phone_e164: string }[] };
+        assert(Array.isArray(out.suggestions), JSON.stringify(out));
+        assert(
+            out.suggestions.length > 0,
+            `VOYGR answered with no suggestions: ${JSON.stringify(out)}`,
+        );
+        assertEquals(typeof out.suggestions[0].phone_e164, "string");
+        // the bill is a number of credits, whatever VOYGR's price is today
+        assertEquals(typeof result.usage.credits.default, "number");
+        assertEquals(typeof result.usage.evidence.CALL, "number");
     },
 });

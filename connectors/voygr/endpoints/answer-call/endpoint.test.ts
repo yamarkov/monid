@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { type Json, type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
@@ -152,3 +153,19 @@ Deno.test("answer-call sends an outcome with its request_id", () =>
         url: "https://api.voygr.tech/calls/c_synthetic02/answer",
         body: { outcome: "timeout", request_id: "req_synthetic01" },
     }, { body: { delivered: true, reason: "delivered" } }));
+
+Deno.test({
+    name: "voygr#answer-call live: an unknown call_id is a 404 at zero",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        // VOYGR checks the call is this workspace's before it delivers
+        // anything, so no call hears this answer
+        const result = await h.live({
+            pathParams: { call_id: "c_00000000000000000000000000000000" },
+            body: { answer: "This is a connector test." },
+        });
+        assertEquals(result.httpStatus, 404, JSON.stringify(result));
+        assertEquals(result.isProviderError, true);
+        assertEquals(result.usage, { credits: {}, evidence: {} });
+    },
+});

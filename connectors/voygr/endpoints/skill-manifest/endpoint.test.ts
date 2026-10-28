@@ -1,7 +1,8 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { type Json, type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
@@ -91,3 +92,21 @@ Deno.test("skill-manifest encodes the skill id into one path segment", () =>
         method: "GET",
         url: "https://api.voygr.tech/skills/..%2Fcalls/manifest",
     }));
+
+Deno.test({
+    name:
+        "voygr#skill-manifest live: a manifest names its skill and its input schema",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        const result = await h.live({ pathParams: { skill_id: "concierge" } });
+        assertEquals(result.httpStatus, 200, JSON.stringify(result));
+        assertEquals(result.isProviderError, false);
+        assertEquals(result.usage, { credits: {}, evidence: {} });
+        const manifest = result.output as {
+            skill_id: string;
+            input_schema: { required: string[] };
+        };
+        assertEquals(manifest.skill_id, "concierge");
+        assert(Array.isArray(manifest.input_schema.required));
+    },
+});

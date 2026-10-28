@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { type Json, type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
@@ -141,3 +142,16 @@ Deno.test("get-call encodes the call id into one path segment", () =>
         method: "GET",
         url: "https://api.voygr.tech/calls/a%2Fb%3Fc",
     }));
+
+Deno.test({
+    name: "voygr#get-call live: an unknown call_id is a 404 at zero",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        const result = await h.live({
+            pathParams: { call_id: "c_00000000000000000000000000000000" },
+        });
+        assertEquals(result.httpStatus, 404, JSON.stringify(result));
+        assertEquals(result.isProviderError, true);
+        assertEquals(result.usage, { credits: {}, evidence: {} });
+    },
+});

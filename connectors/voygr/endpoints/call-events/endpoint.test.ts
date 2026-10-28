@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { type Json, type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
@@ -310,3 +311,17 @@ Deno.test("call-events declares the sub-account binding", () =>
 
 Deno.test("call-events fails closed without a sub-account, with no request at all", () =>
     h.assertFailsClosed({ pathParams: { call_id: "c_synthetic01" } }));
+
+Deno.test({
+    name: "voygr#call-events live: an unknown call_id is a 404 at zero",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        // the probe read of the call answers 404, so no stream is opened
+        const result = await h.live({
+            pathParams: { call_id: "c_00000000000000000000000000000000" },
+        });
+        assertEquals(result.httpStatus, 404, JSON.stringify(result));
+        assertEquals(result.isProviderError, true);
+        assertEquals(result.usage, { credits: {}, evidence: {} });
+    },
+});

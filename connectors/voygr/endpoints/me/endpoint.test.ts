@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { type Json } from "@shared/core";
-import { harness } from "../../test-support.ts";
+import { assertInputAccepted, liveSkip, testSealedUnit } from "@shared/testing";
+import { harness, OWNED } from "../../test-support.ts";
 
 /**
  * `voygr#me`. SYNTHETIC: a real `/users/me` holds the partner's account
@@ -10,7 +11,8 @@ import { harness } from "../../test-support.ts";
  * key's own view. Every value is made up.
  */
 
-const h = harness("voygr#me", import.meta.url);
+const ID = "voygr#me";
+const h = harness(ID, import.meta.url);
 
 /** Every field of the answer that describes the partner account, not the
  *  sub-account, and `credits_hold_per_call`: what VOYGR holds per call,
@@ -113,6 +115,21 @@ Deno.test("me passes an error through and strips customer_id from it", async () 
     assertEquals(result.output, refusal);
 });
 
+// There is no input to refuse: the compiled input schema is empty. So the
+// gate is pinned the other way round: no field is declared, and the empty
+// input runs.
+Deno.test("me takes no input", async () => {
+    const unit = await testSealedUnit(ID);
+    assertEquals(unit.doc.input, { schema: {} });
+    await assertInputAccepted({
+        unit,
+        input: {},
+        mode: "replay",
+        fixture: await h.fixture("synthetic-sub-account"),
+        resources: [OWNED],
+    });
+});
+
 Deno.test("me declares the sub-account binding", () => h.assertBinding());
 
 Deno.test("me fails closed without a sub-account", () =>
@@ -123,3 +140,28 @@ Deno.test("me sends a bodyless GET with the workspace's sub-account", () =>
         method: "GET",
         url: "https://api.voygr.tech/users/me",
     }));
+
+Deno.test({
+    name:
+        "voygr#me live: only the allowlisted limits come back, each of its type",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        const result = await h.live({});
+        assertEquals(result.httpStatus, 200, JSON.stringify(result));
+        assertEquals(result.isProviderError, false);
+        assertEquals(result.usage, { credits: {}, evidence: {} });
+        // VOYGR documents none of the four as always present, so a key may
+        // be missing. What is there is one of the four, of its type.
+        const out = result.output as Me;
+        const types: Record<string, string> = {
+            max_concurrent_calls: "number",
+            max_calls_per_day: "number",
+            credits_charge_per_successful_call: "number",
+            maintenance: "object", // null, or the window that is set
+        };
+        for (const [key, value] of Object.entries(out)) {
+            assert(key in types, `${key} is not an allowlisted field`);
+            assertEquals(typeof value, types[key], key);
+        }
+    },
+});

@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { type RunInput } from "@shared/core";
 import {
     assertInputAccepted,
+    liveSkip,
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
@@ -84,3 +85,17 @@ Deno.test("cancel-job sends a bodyless DELETE with the workspace's sub-account",
         method: "DELETE",
         url: "https://api.voygr.tech/v1/jobs/batch_1",
     }, { body: { batch_id: "batch_1", status: "cancelled" } }));
+
+Deno.test({
+    name: "voygr#cancel-job live: an unknown batch_id is a 404 at zero",
+    ignore: liveSkip("voygr"),
+    fn: async () => {
+        // a job that is not this workspace's: nothing is cancelled
+        const result = await h.live({
+            pathParams: { batch_id: "batch_00000000000000000000000000000000" },
+        });
+        assertEquals(result.httpStatus, 404, JSON.stringify(result));
+        assertEquals(result.isProviderError, true);
+        assertEquals(result.usage, ZERO);
+    },
+});

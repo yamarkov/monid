@@ -11,6 +11,7 @@ import {
     runEndpoint,
     testSealedUnit,
 } from "@shared/testing";
+import { harness } from "../../test-support.ts";
 
 /**
  * `voygr#enrich`. The fixtures are real answers from api.voygr.tech
@@ -20,6 +21,7 @@ import {
 
 const FIXTURES = fromFileUrl(new URL("./fixtures/", import.meta.url));
 const ID = "voygr#enrich";
+const h = harness(ID, import.meta.url);
 const SUB_ID = "sub_00000000000000000000000000000001";
 const OWNED: OwnedResource = {
     resource: "voygr/sub-account",
@@ -492,33 +494,20 @@ Deno.test("enrich: POST /v1/enrich on the VOYGR origin", async () => {
 });
 
 Deno.test({
-    name: "voygr#enrich live: a standard request bills one credit",
+    name:
+        "voygr#enrich live: a standard request answers with its attributes and a bill",
     ignore: liveSkip("voygr"),
     fn: async () => {
-        const unit = await testSealedUnit(ID);
-        const input = { body: { ...PLACE, attributes: ["phone"] } };
-        // the key must have sub-accounts enabled: ensure creates (or finds)
-        // the sub-account for `monid:live-test` first, as the host does
-        // before a workspace's first run, and the run gets it as owned
-        const seeds = await (await loadEndpoint({
-            unit,
-            input,
-            mode: "live",
-            scopeKey: "live-test",
-        })).ensure(input);
-        assertEquals(seeds.length, 1, JSON.stringify(seeds));
-        const result = await runEndpoint({
-            unit,
-            input,
-            mode: "live",
-            scopeKey: "live-test",
-            resources: seeds.map(({ resource, externalId, data }) => ({
-                resource,
-                externalId,
-                data,
-            })),
+        const result = await h.live({
+            body: { ...PLACE, attributes: ["phone"] },
         });
+        assertEquals(result.httpStatus, 200, JSON.stringify(result));
         assertEquals(result.isProviderError, false, JSON.stringify(result));
-        assertEquals(result.usage.credits, { default: 1 });
+        const out = result.output as { success: boolean; attributes: Json };
+        assertEquals(out.success, true);
+        assertEquals(typeof out.attributes, "object");
+        // the bill is a number of credits, whatever VOYGR's price is today
+        assertEquals(typeof result.usage.credits.default, "number");
+        assertEquals(typeof result.usage.evidence.CREDIT, "number");
     },
 });

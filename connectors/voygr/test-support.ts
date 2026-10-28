@@ -9,6 +9,7 @@ import {
 import { directTransport, Engine } from "@monid/connector-engine";
 import {
     fixtureReader,
+    loadEndpoint,
     loadFixture,
     runEndpoint,
     testSealedUnit,
@@ -111,9 +112,36 @@ export function harness(id: string, endpointUrl: string) {
         return wireWith(() => Response.json(body, { status }), resources);
     }
 
+    /** Run the endpoint against api.voygr.tech as the `monid:live-test`
+     *  workspace. The key must have sub-accounts enabled: `ensure` creates
+     *  (or finds) that sub-account first, as the host does before a
+     *  workspace's first run, and the run gets it as owned. */
+    async function live(input: RunInput) {
+        const unit = await testSealedUnit(id);
+        const seeds = await (await loadEndpoint({
+            unit,
+            input,
+            mode: "live",
+            scopeKey: "live-test",
+        })).ensure(input);
+        assertEquals(seeds.length, 1, JSON.stringify(seeds));
+        return await runEndpoint({
+            unit,
+            input,
+            mode: "live",
+            scopeKey: "live-test",
+            resources: seeds.map(({ resource, externalId, data }) => ({
+                resource,
+                externalId,
+                data,
+            })),
+        });
+    }
+
     return {
         fixture,
         run,
+        live,
         recorded,
         wire,
         wireWith,

@@ -1,3 +1,4 @@
+// No live test: a live run would dial a real business.
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import {
     type Json,
@@ -657,6 +658,14 @@ Deno.test("a 2xx without a call id is a 502 at zero", async () => {
         assertEquals(result.httpStatus, 502);
         assertEquals(result.providerHttpStatus, 202);
         assertEquals(result.usage, ZERO);
+        // a call may have been dialled: the caller is told to look before
+        // it sends the task again
+        assertEquals(result.output, {
+            code: "MALFORMED_CALL",
+            message: "VOYGR accepted the call but returned no call id. " +
+                "A call may have been placed: read voygr#list-calls before " +
+                "you send it again.",
+        });
     }
 });
 

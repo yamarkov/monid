@@ -1,3 +1,4 @@
+// No live test: a live batch job costs credits.
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { type Json, type RunInput, RunKind, type RunState } from "@shared/core";
 import {

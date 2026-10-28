@@ -1,3 +1,4 @@
+// No live test: a live batch job costs credits.
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import {
     type Json,
